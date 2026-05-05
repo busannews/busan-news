@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>부산 정치 뉴스 모니터</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f4f0; --surface: #ffffff; --surface2: #f0efe9;
+    --border: rgba(0,0,0,0.1); --border2: rgba(0,0,0,0.18);
+    --text: #1a1a1a; --text2: #555; --text3: #999;
+    --blue: #1a5eb8; --blue-bg: #e8f0fb; --blue-text: #1a5eb8;
+    --green: #0f6e56; --red-bg: #faece7; --red-text: #993c1d; --accent: #d85a30;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111110; --surface: #1c1c1b; --surface2: #252524;
+      --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.18);
+      --text: #f0efe9; --text2: #aaa; --text3: #666;
+      --blue: #6aa3f0; --blue-bg: #0c2a4a; --blue-text: #90bef5;
+      --green: #5dcaa5; --red-bg: #4a1b0c; --red-text: #f0997b;
+    }
+  }
+  body { font-family: 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  header {
+    background: var(--surface); border-bottom: 0.5px solid var(--border);
+    padding: 16px 24px; display: flex; align-items: center;
+    justify-content: space-between; flex-wrap: wrap; gap: 12px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
+  .logo span { color: var(--accent); }
+  .status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text2); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+  .dot.loading { background: #ba7517; animation: blink 1s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .btn {
+    font-family: 'Noto Sans KR', sans-serif; font-size: 13px;
+    padding: 6px 14px; border-radius: 8px; border: 0.5px solid var(--border2);
+    background: transparent; color: var(--text); cursor: pointer; transition: background 0.15s;
+  }
+  .btn:hover { background: var(--surface2); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  main { max-width: 760px; margin: 0 auto; padding: 20px 16px 40px; }
+  .keywords-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .kw-label { font-size: 12px; color: var(--text3); }
+  .kw-badge {
+    font-size: 12px; padding: 5px 12px; border-radius: 20px;
+    background: var(--surface2); color: var(--text2); border: 0.5px solid var(--border);
+    cursor: pointer; transition: all 0.15s; user-select: none;
+  }
+  .kw-badge.active { background: var(--blue-bg); color: var(--blue-text); border-color: transparent; font-weight: 500; }
+  .timer-card {
+    background: var(--surface); border: 0.5px solid var(--border); border-radius: 12px;
+    padding: 14px 18px; display: flex; align-items: center; gap: 16px; margin-bottom: 14px;
+  }
+  .timer-label { font-size: 12px; color: var(--text3); }
+  .timer-val { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 500; color: var(--text); }
+  .last-update { font-size: 12px; color: var(--text3); margin-left: auto; }
+  .progress-wrap { height: 3px; background: var(--border); border-radius: 2px; margin-bottom: 18px; overflow: hidden; }
+  .progress-bar { height: 100%; background: var(--blue); border-radius: 2px; transition: width 1s linear; }
+  .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .section-label { font-size: 12px; color: var(--text3); font-weight: 500; letter-spacing: 0.5px; }
+  .news-list { display: flex; flex-direction: column; gap: 10px; }
+  .news-card {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: 12px; padding: 16px 18px; transition: border-color 0.15s;
+  }
+  .news-card:hover { border-color: var(--border2); }
+  .news-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .news-kw { font-size: 11px; padding: 3px 9px; border-radius: 20px; background: var(--blue-bg); color: var(--blue-text); font-weight: 500; }
+  .news-source { font-size: 12px; color: var(--text3); }
+  .news-time { font-size: 12px; color: var(--text3); margin-left: auto; }
+  .new-tag { font-size: 11px; padding: 2px 7px; border-radius: 6px; background: var(--red-bg); color: var(--red-text); font-weight: 500; }
+  .news-title { font-size: 15px; font-weight: 500; color: var(--text); line-height: 1.5; margin-bottom: 6px; cursor: pointer; text-decoration: none; display: block; }
+  .news-title:hover { color: var(--blue); }
+  .news-desc { font-size: 13px; color: var(--text2); line-height: 1.65; }
+  .empty { text-align: center; padding: 3rem 1rem; color: var(--text3); font-size: 14px; }
+  .error-msg { background: var(--red-bg); color: var(--red-text); border-radius: 10px; padding: 12px 16px; font-size: 13px; margin-bottom: 10px; }
+  footer { text-align: center; padding: 20px; font-size: 12px; color: var(--text3); border-top: 0.5px solid var(--border); }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">부산 정치 <span>뉴스 모니터</span></div>
+  <div class="status">
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText">Firebase 연결 중...</span>
+    <button class="btn" id="refreshBtn" onclick="fetchAllNews()" disabled>지금 업데이트</button>
+  </div>
+</header>
+<main>
+  <div class="keywords-row">
+    <span class="kw-label">키워드</span>
+    <span class="kw-badge active" onclick="toggleKeyword(this,'정이한')">정이한</span>
+    <span class="kw-badge active" onclick="toggleKeyword(this,'전재수')">전재수</span>
+    <span class="kw-badge active" onclick="toggleKeyword(this,'박형준')">박형준</span>
+    <span class="kw-badge active" onclick="toggleKeyword(this,'부산시장')">부산시장</span>
+  </div>
+  <div class="timer-card">
+    <div>
+      <div class="timer-label">다음 자동 업데이트까지</div>
+      <div class="timer-val" id="countdown">--:--</div>
+    </div>
+    <div class="last-update">마지막 업데이트: <span id="lastUpdate">-</span></div>
+  </div>
+  <div class="progress-wrap"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
+  <div class="toolbar">
+    <div class="section-label">뉴스 목록 <span id="newsCount" style="font-weight:400;color:var(--text3);"></span></div>
+    <button class="btn" style="font-size:12px;padding:4px 10px;color:var(--text3);"
+      onclick="if(confirm('저장된 뉴스를 모두 삭제할까요?')) clearAllNews()">기록 초기화</button>
+  </div>
+  <div id="errorMsg" style="display:none;" class="error-msg"></div>
+  <div class="news-list" id="newsList">
+    <div class="empty">Firebase에서 뉴스를 불러오는 중...</div>
+  </div>
+</main>
+<footer>매 정각·30분 자동 업데이트 &middot; 누구나 같은 뉴스 목록 공유 &middot; 출처: Google Alerts</footer>
+
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getDatabase, ref, set, get, remove, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBwv8yGLNrqzt-qnGB5j7HsBEeaZjQBS7o",
+  authDomain: "busan-news.firebaseapp.com",
+  databaseURL: "https://busan-news-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "busan-news",
+  storageBucket: "busan-news.firebasestorage.app",
+  messagingSenderId: "507891584196",
+  appId: "1:507891584196:web:c0c09a0aedba0b703c0d91",
+  measurementId: "G-6JEY0Z2B5M"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const newsRef = ref(db, 'news');
+const seenRef = ref(db, 'seenIds');
+
+const FEEDS = [
+  { keyword: '정이한',   url: 'https://www.google.com/alerts/feeds/18149858932748856698/13338804319013329313' },
+  { keyword: '전재수',   url: 'https://www.google.com/alerts/feeds/18149858932748856698/13383878750521337790' },
+  { keyword: '박형준',   url: 'https://www.google.com/alerts/feeds/18149858932748856698/13383878750521335879' },
+  { keyword: '부산시장', url: 'https://www.google.com/alerts/feeds/18149858932748856698/13084999270825031080' },
+];
+const PROXY = 'https://api.allorigins.win/get?url=';
+const MAX_NEWS = 200;
+
+let activeKeywords = new Set(FEEDS.map(f => f.keyword));
+let allNews = [];
+let seenIds = new Set();
+let nextUpdateTime = null;
+
+// ── Firebase 실시간 동기화: 다른 기기에서 업데이트되면 자동 반영 ──
+onValue(newsRef, (snapshot) => {
+  const data = snapshot.val();
+  if (data) {
+    allNews = Object.values(data).sort((a, b) => (b.savedTs || 0) - (a.savedTs || 0));
+  } else {
+    allNews = [];
+  }
+  renderNews();
+  document.getElementById('statusText').textContent = '연결됨';
+  document.getElementById('refreshBtn').disabled = false;
+  document.getElementById('statusDot').className = 'dot';
+});
+
+onValue(seenRef, (snapshot) => {
+  const data = snapshot.val();
+  seenIds = data ? new Set(Object.keys(data)) : new Set();
+});
+
+// ── 타이머 ──
+function getNextScheduledTime() {
+  const now = new Date(), next = new Date(now);
+  if (now.getMinutes() < 30) next.setMinutes(30, 0, 0);
+  else next.setHours(now.getHours() + 1, 0, 0, 0);
+  return next;
+}
+function updateCountdown() {
+  if (!nextUpdateTime) return;
+  const diff = Math.max(0, nextUpdateTime - new Date());
+  const m = Math.floor(diff / 60000), s = Math.floor((diff % 60000) / 1000);
+  document.getElementById('countdown').textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  document.getElementById('progressBar').style.width = Math.min(100, Math.round(((30*60000 - diff) / (30*60000)) * 100)) + '%';
+  if (diff <= 0) fetchAllNews();
+}
+
+// ── RSS 파싱 ──
+function stripHtml(html) {
+  return (html||'').replace(/<[^>]+>/g,'').replace(/&quot;/g,'"').replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim();
+}
+function formatDate(dateStr) {
+  try {
+    const diff = Math.round((Date.now() - new Date(dateStr)) / 60000);
+    if (diff < 1) return '방금';
+    if (diff < 60) return diff + '분 전';
+    if (diff < 1440) return Math.floor(diff/60) + '시간 전';
+    const d = new Date(dateStr);
+    return (d.getMonth()+1) + '/' + d.getDate();
+  } catch(e) { return ''; }
+}
+function savedAt() {
+  const n = new Date();
+  return (n.getMonth()+1) + '/' + n.getDate() + ' ' + n.getHours() + ':' + String(n.getMinutes()).padStart(2,'0');
+}
+
+async function fetchFeed(feed) {
+  try {
+    const res = await fetch(PROXY + encodeURIComponent(feed.url));
+    const data = await res.json();
+    const doc = new DOMParser().parseFromString(data.contents, 'text/xml');
+    const entries = doc.querySelectorAll('entry');
+    const at = savedAt();
+    const ts = Date.now();
+    return Array.from(entries).slice(0, 5).map((entry, i) => {
+      const title = stripHtml(entry.querySelector('title')?.textContent || '');
+      const link = entry.querySelector('link')?.getAttribute('href') || '';
+      const published = entry.querySelector('published')?.textContent || '';
+      const content = stripHtml(entry.querySelector('content')?.textContent || '');
+      const source = entry.querySelector('source title')?.textContent || 'Google Alerts';
+      const rawId = (entry.querySelector('id')?.textContent || link).slice(-24);
+      const id = feed.keyword + '_' + rawId.replace(/[.#$/[\]]/g, '_');
+      return { keyword: feed.keyword, title, url: link, time: formatDate(published), desc: content.slice(0, 100) + (content.length > 100 ? '...' : ''), source, savedAt: at, savedTs: ts - i, id };
+    }).filter(item => item.title);
+  } catch(e) {
+    console.error('피드 오류:', feed.keyword, e);
+    return [];
+  }
+}
+
+// ── 전체 업데이트 ──
+window.fetchAllNews = async function() {
+  const dot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const btn = document.getElementById('refreshBtn');
+  const errEl = document.getElementById('errorMsg');
+  dot.className = 'dot loading';
+  btn.disabled = true; errEl.style.display = 'none';
+
+  const active = FEEDS.filter(f => activeKeywords.has(f.keyword));
+  let totalNew = 0;
+  let done = 0;
+
+  const promises = active.map(feed => fetchFeed(feed).then(async items => {
+    const newItems = items.filter(item => !seenIds.has(item.id));
+    for (const item of newItems) {
+      // Firebase에 저장 (id를 key로 사용)
+      await set(ref(db, 'news/' + item.id), item);
+      await set(ref(db, 'seenIds/' + item.id), true);
+    }
+    totalNew += newItems.length;
+    done++;
+    statusText.textContent = '검색 중... (' + done + '/' + active.length + ')';
+  }));
+
+  await Promise.all(promises);
+
+  // 200개 초과시 오래된 것 정리
+  const snap = await get(newsRef);
+  if (snap.exists()) {
+    const all = Object.entries(snap.val()).sort((a,b) => (b[1].savedTs||0) - (a[1].savedTs||0));
+    if (all.length > MAX_NEWS) {
+      for (const [key] of all.slice(MAX_NEWS)) {
+        await remove(ref(db, 'news/' + key));
+      }
+    }
+  }
+
+  dot.className = 'dot';
+  const now = new Date();
+  statusText.textContent = totalNew > 0 ? '새 뉴스 ' + totalNew + '건' : '업데이트 완료';
+  btn.disabled = false;
+  document.getElementById('lastUpdate').textContent = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0');
+  nextUpdateTime = getNextScheduledTime();
+
+  if (errEl.style.display !== 'none') return;
+  if (allNews.length === 0) {
+    errEl.textContent = '⚠️ 뉴스를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.';
+    errEl.style.display = 'block';
+  }
+}
+
+// ── 초기화 ──
+window.clearAllNews = async function() {
+  await remove(newsRef);
+  await remove(seenRef);
+  allNews = []; seenIds = new Set();
+  renderNews();
+}
+
+// ── 키워드 토글 ──
+window.toggleKeyword = function(el, kw) {
+  el.classList.toggle('active');
+  if (activeKeywords.has(kw)) activeKeywords.delete(kw); else activeKeywords.add(kw);
+  renderNews();
+}
+
+// ── 렌더링 ──
+window.renderNews = function() {
+  const list = document.getElementById('newsList');
+  const filtered = allNews.filter(item => activeKeywords.has(item.keyword));
+  const countEl = document.getElementById('newsCount');
+  if (countEl) countEl.textContent = filtered.length ? '(총 ' + filtered.length + '건)' : '';
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="empty">표시할 뉴스가 없습니다.</div>';
+    return;
+  }
+  list.innerHTML = filtered.map(item =>
+    '<div class="news-card">' +
+      '<div class="news-meta">' +
+        '<span class="news-kw">' + item.keyword + '</span>' +
+        '<span class="news-source">' + (item.source||'') + '</span>' +
+        '<span class="news-time">' + (item.savedAt||item.time||'') + '</span>' +
+      '</div>' +
+      '<a class="news-title" href="' + (item.url||'#') + '" target="_blank" rel="noopener noreferrer">' + item.title + '</a>' +
+      '<div class="news-desc">' + (item.desc||'') + '</div>' +
+    '</div>'
+  ).join('');
+}
+
+// ── 시작 ──
+nextUpdateTime = getNextScheduledTime();
+setInterval(updateCountdown, 1000);
+updateCountdown();
+// Firebase onValue가 초기 데이터를 자동으로 불러오므로
+// 페이지 로드 후 30초 뒤에 첫 뉴스 갱신 시작
+setTimeout(fetchAllNews, 3000);
+</script>
+</body>
+</html>

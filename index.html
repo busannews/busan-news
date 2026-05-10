@@ -28,7 +28,8 @@
   .logo { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
   .logo span { color: var(--accent); }
   .status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text2); }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; flex-shrink: 0; }
+  .dot.on { background: var(--green); }
   .dot.loading { background: #ba7517; animation: blink 1s infinite; }
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
   .btn { font-family: 'Noto Sans KR', sans-serif; font-size: 13px; padding: 6px 14px; border-radius: 8px; border: 0.5px solid var(--border2); background: transparent; color: var(--text); cursor: pointer; transition: background 0.15s; }
@@ -50,7 +51,6 @@
   .news-kw { font-size: 11px; padding: 3px 9px; border-radius: 20px; background: var(--blue-bg); color: var(--blue-text); font-weight: 500; }
   .news-source { font-size: 12px; color: var(--text3); }
   .news-time { font-size: 12px; color: var(--text3); margin-left: auto; }
-  .new-tag { font-size: 11px; padding: 2px 7px; border-radius: 6px; background: var(--red-bg); color: var(--red-text); font-weight: 500; }
   .news-title { font-size: 15px; font-weight: 500; color: var(--text); line-height: 1.5; margin-bottom: 6px; text-decoration: none; display: block; }
   .news-title:hover { color: var(--blue); }
   .news-desc { font-size: 13px; color: var(--text2); line-height: 1.65; }
@@ -79,7 +79,7 @@
       <div class="info-label">마지막 서버 수집</div>
       <div class="info-val" id="lastCollected">-</div>
     </div>
-    <div style="margin-left:auto;font-size:12px;color:var(--text3);">GitHub Actions가 30분마다 자동 수집</div>
+    <div style="margin-left:auto;font-size:12px;color:var(--text3);">GitHub Actions 30분마다 자동 수집</div>
   </div>
   <div class="toolbar">
     <div class="section-label">뉴스 목록 <span id="newsCount" style="font-weight:400;color:var(--text3);"></span></div>
@@ -87,12 +87,12 @@
   </div>
   <div class="news-list" id="newsList"><div class="empty">뉴스를 불러오는 중...</div></div>
 </main>
-<footer>GitHub Actions가 매 정각·30분 자동 수집 &middot; Firebase 공유 저장 &middot; 출처: Google Alerts</footer>
+<footer>GitHub Actions 매 정각·30분 자동 수집 · Firebase 공유 저장 · 출처: Google Alerts</footer>
 
-<script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getDatabase, ref, onValue, remove, set } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
-
+<!-- Firebase 호환 CDN -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script>
 const firebaseConfig = {
   apiKey: "AIzaSyBwv8yGLNrqzt-qnGB5j7HsBEeaZjQBS7o",
   authDomain: "busan-news.firebaseapp.com",
@@ -103,50 +103,56 @@ const firebaseConfig = {
   appId: "1:507891584196:web:c0c09a0aedba0b703c0d91"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const newsRef = ref(db, 'news');
-const metaRef = ref(db, 'meta');
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
 let activeKeywords = new Set(['정이한','전재수','박형준','부산시장']);
 let allNews = [];
 
-// Firebase 실시간 뉴스 수신
-onValue(newsRef, (snapshot) => {
+// Firebase 실시간 연결
+db.ref('news').on('value', function(snapshot) {
   const data = snapshot.val();
-  allNews = data ? Object.values(data).sort((a,b) => (b.savedTs||0) - (a.savedTs||0)) : [];
+  allNews = data ? Object.values(data).sort(function(a,b){ return (b.savedTs||0)-(a.savedTs||0); }) : [];
   renderNews();
-  document.getElementById('statusDot').className = 'dot';
+  document.getElementById('statusDot').className = 'dot on';
   document.getElementById('statusText').textContent = '실시간 연결됨';
+}, function(error) {
+  document.getElementById('statusDot').className = 'dot';
+  document.getElementById('statusText').textContent = '연결 오류: ' + error.message;
+  document.getElementById('newsList').innerHTML = '<div class="empty">⚠️ Firebase 연결 오류: ' + error.message + '</div>';
 });
 
-// 마지막 수집 시각 표시
-onValue(metaRef, (snapshot) => {
+db.ref('meta').on('value', function(snapshot) {
   const data = snapshot.val();
   if (data && data.lastCollected) {
     document.getElementById('lastCollected').textContent = data.lastCollected;
   }
 });
 
-window.toggleKeyword = function(el, kw) {
+function toggleKeyword(el, kw) {
   el.classList.toggle('active');
   if (activeKeywords.has(kw)) activeKeywords.delete(kw); else activeKeywords.add(kw);
   renderNews();
 }
 
-window.clearAllNews = async function() {
-  await remove(newsRef);
-  allNews = []; renderNews();
+function clearAllNews() {
+  db.ref('news').remove();
+  db.ref('seenIds').remove();
+  allNews = [];
+  renderNews();
 }
 
-window.renderNews = function() {
-  const list = document.getElementById('newsList');
-  const filtered = allNews.filter(i => activeKeywords.has(i.keyword));
-  const countEl = document.getElementById('newsCount');
+function renderNews() {
+  var list = document.getElementById('newsList');
+  var filtered = allNews.filter(function(i){ return activeKeywords.has(i.keyword); });
+  var countEl = document.getElementById('newsCount');
   if (countEl) countEl.textContent = filtered.length ? '(총 ' + filtered.length + '건)' : '';
-  if (!filtered.length) { list.innerHTML = '<div class="empty">표시할 뉴스가 없습니다.</div>'; return; }
-  list.innerHTML = filtered.map(item =>
-    '<div class="news-card">' +
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty">표시할 뉴스가 없습니다.</div>';
+    return;
+  }
+  list.innerHTML = filtered.map(function(item) {
+    return '<div class="news-card">' +
       '<div class="news-meta">' +
         '<span class="news-kw">' + item.keyword + '</span>' +
         '<span class="news-source">' + (item.source||'') + '</span>' +
@@ -154,8 +160,8 @@ window.renderNews = function() {
       '</div>' +
       '<a class="news-title" href="' + (item.url||'#') + '" target="_blank" rel="noopener">' + item.title + '</a>' +
       '<div class="news-desc">' + (item.desc||'') + '</div>' +
-    '</div>'
-  ).join('');
+    '</div>';
+  }).join('');
 }
 </script>
 </body>

@@ -1,4 +1,5 @@
 import urllib.request
+import urllib.parse
 import xml.etree.ElementTree as ET
 import json
 import re
@@ -28,8 +29,12 @@ def format_saved_at():
     return f"{now.month}/{now.day} {now.hour}:{now.minute:02d}"
 
 def safe_id(keyword, raw):
-    raw = re.sub(r'[.#$/\[\]]', '_', raw)
-    return f"{keyword}_{raw[-24:]}"
+    import hashlib
+    # 한글 키워드를 영문으로 매핑
+    kw_map = {'정이한': 'jungihan', '전재수': 'jeonjaesu', '박형준': 'parkhyungjun', '부산시장': 'busanmayor'}
+    kw_en = kw_map.get(keyword, keyword)
+    h = hashlib.md5(raw.encode('utf-8')).hexdigest()[:16]
+    return f"{kw_en}_{h}"
 
 def fetch_feed(feed):
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -85,23 +90,26 @@ def firebase_get(path):
         return None
 
 def firebase_patch(path, data):
-    url = f"{FIREBASE_URL}/{path}.json"
-    payload = json.dumps(data).encode()
+    encoded = urllib.parse.quote(path, safe='/')
+    url = f"{FIREBASE_URL}/{encoded}.json"
+    payload = json.dumps(data, ensure_ascii=False).encode('utf-8')
     req = urllib.request.Request(url, data=payload, method='PATCH',
-                                  headers={'Content-Type': 'application/json'})
+                                  headers={'Content-Type': 'application/json; charset=utf-8'})
     with urllib.request.urlopen(req, timeout=10) as resp:
         return resp.read()
 
 def firebase_put(path, data):
-    url = f"{FIREBASE_URL}/{path}.json"
-    payload = json.dumps(data).encode()
+    encoded = urllib.parse.quote(path, safe='/')
+    url = f"{FIREBASE_URL}/{encoded}.json"
+    payload = json.dumps(data, ensure_ascii=False).encode('utf-8')
     req = urllib.request.Request(url, data=payload, method='PUT',
-                                  headers={'Content-Type': 'application/json'})
+                                  headers={'Content-Type': 'application/json; charset=utf-8'})
     with urllib.request.urlopen(req, timeout=10) as resp:
         return resp.read()
 
 def firebase_delete(path):
-    url = f"{FIREBASE_URL}/{path}.json"
+    encoded = urllib.parse.quote(path, safe='/')
+    url = f"{FIREBASE_URL}/{encoded}.json"
     req = urllib.request.Request(url, method='DELETE')
     with urllib.request.urlopen(req, timeout=10) as resp:
         return resp.read()

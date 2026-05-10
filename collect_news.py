@@ -32,43 +32,27 @@ def make_id(keyword_en, raw):
     h = hashlib.md5(raw.encode('utf-8')).hexdigest()[:16]
     return f"{keyword_en}_{h}"
 
-# Firebase 요청 공통 함수
-def firebase_request(path, method='GET', data=None):
-    safe_path = urllib.parse.quote(path, safe='/')
-    url = f"{FIREBASE_URL}/{safe_path}.json"
-    payload = None
-    headers = {}
-    if data is not None:
-        payload = json.dumps(data, ensure_ascii=False).encode('utf-8')
-        headers['Content-Type'] = 'application/json; charset=utf-8'
-    req = urllib.request.Request(url, data=payload, method=method, headers=headers)
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        return json.loads(resp.read())
-
 def firebase_get(path):
     try:
-        return firebase_request(path, 'GET')
+        url = f"{FIREBASE_URL}/{path}.json"
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read())
     except Exception as e:
-        print(f"GET 오류 ({path}): {e}")
+        print(f"GET 오류: {e}")
         return None
-
-def firebase_patch(path, data):
-    try:
-        return firebase_request(path, 'PATCH', data)
-    except Exception as e:
-        print(f"PATCH 오류 ({path}): {e}")
 
 def firebase_put(path, data):
     try:
-        return firebase_request(path, 'PUT', data)
+        url = f"{FIREBASE_URL}/{path}.json"
+        payload = json.dumps(data, ensure_ascii=False).encode('utf-8')
+        req = urllib.request.Request(url, data=payload, method='PUT',
+                                     headers={'Content-Type': 'application/json; charset=utf-8'})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read())
     except Exception as e:
-        print(f"PUT 오류 ({path}): {e}")
-
-def firebase_delete(path):
-    try:
-        return firebase_request(path, 'DELETE')
-    except Exception as e:
-        print(f"DELETE 오류 ({path}): {e}")
+        print(f"PUT 오류: {e}")
+        return None
 
 def fetch_feed(feed):
     headers = {'User-Agent': 'Mozilla/5.0 (compatible; NewsBot/1.0)'}
@@ -118,10 +102,10 @@ def fetch_feed(feed):
 def main():
     print("=== 뉴스 수집 시작 ===")
 
-    # 기존 seenIds 가져오기
-    seen_data = firebase_get('seenIds') or {}
-    seen_ids = set(seen_data.keys())
-    print(f"기존 수집된 ID 수: {len(seen_ids)}")
+    # 기존 데이터 가져오기
+    existing_news = firebase_get('news') or {}
+    seen_ids = set(existing_news.keys())
+    print(f"기존 뉴스 수: {len(existing_news)}")
 
     # 모든 피드 수집
     all_items = []
@@ -135,21 +119,20 @@ def main():
     print(f"새 뉴스: {len(new_items)}개")
 
     if new_items:
-        news_patch = {item['id']: item for item in new_items}
-        firebase_patch('news', news_patch)
-        seen_patch = {item['id']: True for item in new_items}
-        firebase_patch('seenIds', seen_patch)
-        print(f"Firebase 저장 완료: {len(new_items)}개")
+        # 기존 + 새 뉴스 합치기
+        merged = dict(existing_news)
+        for item in new_items:
+            merged[item['id']] = item
 
-    # 200개 초과시 오래된 것 정리
-    all_news = firebase_get('news') or {}
-    if len(all_news) > MAX_NEWS:
-        sorted_news = sorted(all_news.items(), key=lambda x: x[1].get('savedTs', 0), reverse=True)
-        to_delete = sorted_news[MAX_NEWS:]
-        print(f"오래된 뉴스 {len(to_delete)}개 정리 중...")
-        for key, _ in to_delete:
-            firebase_delete(f'news/{key}')
-        print("정리 완료")
+        # MAX_NEWS 초과시 오래된 것 제거 (한글 키 없이 Python에서 처리)
+        if len(merged) > MAX_NEWS:
+            sorted_items = sorted(merged.items(), key=lambda x: x[1].get('savedTs', 0), reverse=True)
+            merged = dict(sorted_items[:MAX_NEWS])
+            print(f"200개 초과 → {MAX_NEWS}개로 정리")
+
+        # Firebase에 전체 덮어쓰기 (PUT) - 한 번에 저장
+        firebase_put('news', merged)
+        print(f"Firebase 저장 완료: 총 {len(merged)}개")
 
     # 마지막 수집 시각 업데이트
     now_kst = datetime.now(KST)

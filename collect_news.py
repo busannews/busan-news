@@ -102,10 +102,11 @@ def fetch_feed(feed):
 def main():
     print("=== 뉴스 수집 시작 ===")
 
-    # 기존 데이터 가져오기
+    # 기존 뉴스 가져오기
     existing_news = firebase_get('news') or {}
-    seen_ids = set(existing_news.keys())
-    print(f"기존 뉴스 수: {len(existing_news)}")
+    # 영문 키만 seenIds로 사용 (한글 키 완전 무시)
+    seen_ids = set(k for k in existing_news.keys() if not any(ord(c) > 127 for c in k))
+    print(f"기존 뉴스 수: {len(existing_news)} (유효: {len(seen_ids)})")
 
     # 모든 피드 수집
     all_items = []
@@ -114,25 +115,27 @@ def main():
         all_items.extend(items)
         time.sleep(1)
 
-    # 새 항목만 필터링
+    # 새 항목 필터링
     new_items = [item for item in all_items if item['id'] not in seen_ids]
     print(f"새 뉴스: {len(new_items)}개")
 
-    if new_items:
-        # 기존 + 새 뉴스 합치기
-        merged = dict(existing_news)
-        for item in new_items:
-            merged[item['id']] = item
+    # 기존 뉴스 중 영문 키만 유지 (한글 키 제거)
+    clean_existing = {k: v for k, v in existing_news.items() if not any(ord(c) > 127 for c in k)}
 
-        # MAX_NEWS 초과시 오래된 것 제거 (한글 키 없이 Python에서 처리)
-        if len(merged) > MAX_NEWS:
-            sorted_items = sorted(merged.items(), key=lambda x: x[1].get('savedTs', 0), reverse=True)
-            merged = dict(sorted_items[:MAX_NEWS])
-            print(f"200개 초과 → {MAX_NEWS}개로 정리")
+    # 항상 Firebase 업데이트 (새 뉴스 없어도 meta는 업데이트)
+    merged = dict(clean_existing)
+    for item in new_items:
+        merged[item['id']] = item
 
-        # Firebase에 전체 덮어쓰기 (PUT) - 한 번에 저장
-        firebase_put('news', merged)
-        print(f"Firebase 저장 완료: 총 {len(merged)}개")
+    # MAX_NEWS 초과시 오래된 것 Python에서 정리
+    if len(merged) > MAX_NEWS:
+        sorted_items = sorted(merged.items(), key=lambda x: x[1].get('savedTs', 0), reverse=True)
+        merged = dict(sorted_items[:MAX_NEWS])
+        print(f"200개 초과 → {MAX_NEWS}개로 정리")
+
+    # Firebase 저장 (항상 실행)
+    firebase_put('news', merged)
+    print(f"Firebase 저장 완료: 총 {len(merged)}개")
 
     # 마지막 수집 시각 업데이트
     now_kst = datetime.now(KST)

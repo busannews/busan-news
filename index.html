@@ -32,18 +32,26 @@
   .dot.on { background: var(--green); }
   .dot.loading { background: #ba7517; animation: blink 1s infinite; }
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
-  .btn { font-family: 'Noto Sans KR', sans-serif; font-size: 13px; padding: 6px 14px; border-radius: 8px; border: 0.5px solid var(--border2); background: transparent; color: var(--text); cursor: pointer; transition: background 0.15s; }
+  .btn { font-family: 'Noto Sans KR', sans-serif; font-size: 13px; padding: 7px 16px; border-radius: 8px; border: 0.5px solid var(--border2); background: transparent; color: var(--text); cursor: pointer; transition: background 0.15s; }
   .btn:hover { background: var(--surface2); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { background: var(--blue); color: #fff; border-color: var(--blue); font-weight: 500; }
+  .btn-primary:hover { background: #1550a0; }
   main { max-width: 760px; margin: 0 auto; padding: 20px 16px 40px; }
   .keywords-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
   .kw-label { font-size: 12px; color: var(--text3); }
   .kw-badge { font-size: 12px; padding: 5px 12px; border-radius: 20px; background: var(--surface2); color: var(--text2); border: 0.5px solid var(--border); cursor: pointer; transition: all 0.15s; user-select: none; }
   .kw-badge.active { background: var(--blue-bg); color: var(--blue-text); border-color: transparent; font-weight: 500; }
-  .info-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 12px; padding: 14px 18px; display: flex; align-items: center; gap: 16px; margin-bottom: 14px; flex-wrap: wrap; }
-  .info-label { font-size: 12px; color: var(--text3); }
+  .info-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 12px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .info-label { font-size: 12px; color: var(--text3); margin-bottom: 3px; }
   .info-val { font-size: 14px; font-weight: 500; color: var(--text); }
+  .timer-box { text-align: right; }
+  .timer-label { font-size: 12px; color: var(--text3); margin-bottom: 3px; }
+  .timer-val { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 500; color: var(--text); }
+  .progress-wrap { height: 3px; background: var(--border); border-radius: 2px; margin-bottom: 18px; overflow: hidden; }
+  .progress-bar { height: 100%; background: var(--blue); border-radius: 2px; transition: width 1s linear; }
   .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-  .section-label { font-size: 12px; color: var(--text3); font-weight: 500; letter-spacing: 0.5px; }
+  .section-label { font-size: 12px; color: var(--text3); font-weight: 500; }
   .news-list { display: flex; flex-direction: column; gap: 10px; }
   .news-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 12px; padding: 16px 18px; transition: border-color 0.15s; }
   .news-card:hover { border-color: var(--border2); }
@@ -51,6 +59,7 @@
   .news-kw { font-size: 11px; padding: 3px 9px; border-radius: 20px; background: var(--blue-bg); color: var(--blue-text); font-weight: 500; }
   .news-source { font-size: 12px; color: var(--text3); }
   .news-time { font-size: 12px; color: var(--text3); margin-left: auto; }
+  .new-tag { font-size: 11px; padding: 2px 7px; border-radius: 6px; background: var(--red-bg); color: var(--red-text); font-weight: 500; }
   .news-title { font-size: 15px; font-weight: 500; color: var(--text); line-height: 1.5; margin-bottom: 6px; text-decoration: none; display: block; }
   .news-title:hover { color: var(--blue); }
   .news-desc { font-size: 13px; color: var(--text2); line-height: 1.65; }
@@ -64,6 +73,7 @@
   <div class="status">
     <span class="dot" id="statusDot"></span>
     <span id="statusText">연결 중...</span>
+    <button class="btn btn-primary" id="refreshBtn" onclick="fetchAllNews()">🔄 업데이트</button>
   </div>
 </header>
 <main>
@@ -74,22 +84,30 @@
     <span class="kw-badge active" onclick="toggleKeyword(this,'박형준')">박형준</span>
     <span class="kw-badge active" onclick="toggleKeyword(this,'부산시장')">부산시장</span>
   </div>
+
   <div class="info-card">
     <div>
       <div class="info-label">마지막 서버 수집</div>
       <div class="info-val" id="lastCollected">-</div>
     </div>
-    <div style="margin-left:auto;font-size:12px;color:var(--text3);">GitHub Actions 30분마다 자동 수집</div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:16px;">
+      <div class="timer-box">
+        <div class="timer-label">다음 자동수집까지</div>
+        <div class="timer-val" id="countdown">--:--</div>
+      </div>
+      <button class="btn" style="font-size:12px;color:var(--text3);" onclick="if(confirm('저장된 뉴스를 모두 삭제할까요?')) clearAllNews()">초기화</button>
+    </div>
   </div>
+
+  <div class="progress-wrap"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
+
   <div class="toolbar">
     <div class="section-label">뉴스 목록 <span id="newsCount" style="font-weight:400;color:var(--text3);"></span></div>
-    <button class="btn" style="font-size:12px;padding:4px 10px;color:var(--text3);" onclick="if(confirm('저장된 뉴스를 모두 삭제할까요?')) clearAllNews()">기록 초기화</button>
   </div>
   <div class="news-list" id="newsList"><div class="empty">뉴스를 불러오는 중...</div></div>
 </main>
-<footer>GitHub Actions 매 정각·30분 자동 수집 · Firebase 공유 저장 · 출처: Google Alerts</footer>
+<footer>GitHub Actions 30분마다 자동 수집 · Firebase 공유 저장 · 최대 500건 보관</footer>
 
-<!-- Firebase 호환 CDN -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
@@ -102,64 +120,134 @@ const firebaseConfig = {
   messagingSenderId: "507891584196",
   appId: "1:507891584196:web:c0c09a0aedba0b703c0d91"
 };
-
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
+const FEEDS = [
+  { keyword: '정이한',   url: 'https://www.google.com/alerts/feeds/18149858932748856698/13338804319013329313' },
+  { keyword: '전재수',   url: 'https://www.google.com/alerts/feeds/18149858932748856698/13383878750521337790' },
+  { keyword: '박형준',   url: 'https://www.google.com/alerts/feeds/18149858932748856698/13383878750521335879' },
+  { keyword: '부산시장', url: 'https://www.google.com/alerts/feeds/18149858932748856698/13084999270825031080' },
+];
+const PROXY = 'https://api.allorigins.win/get?url=';
+const KW_MAP = {'정이한':'jungihan','전재수':'jeonjaesu','박형준':'parkhyungjun','부산시장':'busanmayor'};
+
 let activeKeywords = new Set(['정이한','전재수','박형준','부산시장']);
 let allNews = [];
+let nextUpdate = null;
 
-// Firebase 실시간 연결
+// ── Firebase 실시간 연결 ──
 db.ref('news').on('value', function(snapshot) {
-  const data = snapshot.val();
+  var data = snapshot.val();
   allNews = data ? Object.values(data).sort(function(a,b){ return (b.savedTs||0)-(a.savedTs||0); }) : [];
   renderNews();
   document.getElementById('statusDot').className = 'dot on';
   document.getElementById('statusText').textContent = '실시간 연결됨';
-}, function(error) {
-  document.getElementById('statusDot').className = 'dot';
-  document.getElementById('statusText').textContent = '연결 오류: ' + error.message;
-  document.getElementById('newsList').innerHTML = '<div class="empty">⚠️ Firebase 연결 오류: ' + error.message + '</div>';
 });
 
 db.ref('meta').on('value', function(snapshot) {
-  const data = snapshot.val();
+  var data = snapshot.val();
   if (data && data.lastCollected) {
     document.getElementById('lastCollected').textContent = data.lastCollected;
   }
 });
 
-function toggleKeyword(el, kw) {
-  el.classList.toggle('active');
-  if (activeKeywords.has(kw)) activeKeywords.delete(kw); else activeKeywords.add(kw);
-  renderNews();
+// ── 카운트다운 ──
+function getNextScheduled() {
+  var now = new Date();
+  var next = new Date(now);
+  next.setSeconds(0); next.setMilliseconds(0);
+  if (now.getMinutes() < 30) next.setMinutes(30);
+  else { next.setMinutes(0); next.setHours(next.getHours() + 1); }
+  return next;
+}
+nextUpdate = getNextScheduled();
+setInterval(function() {
+  var diff = Math.max(0, nextUpdate - new Date());
+  var m = Math.floor(diff/60000), s = Math.floor((diff%60000)/1000);
+  document.getElementById('countdown').textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  document.getElementById('progressBar').style.width = Math.min(100, Math.round(((30*60000-diff)/(30*60000))*100)) + '%';
+  if (diff <= 0) { nextUpdate = getNextScheduled(); }
+}, 1000);
+
+// ── RSS 파싱 유틸 ──
+function stripHtml(html) {
+  return (html||'').replace(/<[^>]+>/g,'').replace(/&quot;/g,'"').replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim();
+}
+function savedAt() {
+  var n = new Date(), kst = new Date(n.getTime()+9*3600000);
+  return (kst.getUTCMonth()+1)+'/'+kst.getUTCDate()+' '+kst.getUTCHours()+':'+String(kst.getUTCMinutes()).padStart(2,'0');
+}
+function makeId(keyword, raw) {
+  var hash = 0;
+  for (var i=0;i<raw.length;i++) { hash=((hash<<5)-hash)+raw.charCodeAt(i); hash|=0; }
+  return (KW_MAP[keyword]||keyword)+'_'+Math.abs(hash).toString(16);
 }
 
-function clearAllNews() {
-  db.ref('news').remove();
-  db.ref('seenIds').remove();
-  allNews = [];
-  renderNews();
+async function fetchFeed(feed) {
+  try {
+    var res = await fetch(PROXY + encodeURIComponent(feed.url));
+    var data = await res.json();
+    var doc = new DOMParser().parseFromString(data.contents, 'text/xml');
+    var entries = Array.from(doc.querySelectorAll('entry'));
+    var at = savedAt(), ts = Date.now();
+    return entries.slice(0,20).map(function(entry, i) {
+      var title = stripHtml((entry.querySelector('title')||{}).textContent||'');
+      var link = (entry.querySelector('link')||{getAttribute:()=>''}).getAttribute('href')||'';
+      var content = stripHtml((entry.querySelector('content')||{}).textContent||'');
+      var source = (entry.querySelector('source title')||{}).textContent||'Google Alerts';
+      var rawId = (entry.querySelector('id')||{}).textContent||link;
+      return title ? {keyword:feed.keyword,title,url:link,desc:content.slice(0,120)+(content.length>120?'...':''),source,savedAt:at,savedTs:ts-i,id:makeId(feed.keyword,rawId)} : null;
+    }).filter(Boolean);
+  } catch(e) { console.error(feed.keyword, e); return []; }
 }
+
+// ── 수동 업데이트 버튼 ──
+window.fetchAllNews = async function() {
+  var btn = document.getElementById('refreshBtn');
+  var dot = document.getElementById('statusDot');
+  var statusText = document.getElementById('statusText');
+  btn.disabled = true; dot.className = 'dot loading';
+  var existingIds = new Set(allNews.map(function(n){return n.id;}));
+  var done = 0, totalNew = 0;
+  await Promise.all(FEEDS.filter(function(f){return activeKeywords.has(f.keyword);}).map(function(feed) {
+    return fetchFeed(feed).then(function(items) {
+      var newItems = items.filter(function(i){return !existingIds.has(i.id);});
+      newItems.forEach(function(i){existingIds.add(i.id);});
+      totalNew += newItems.length; done++;
+      statusText.textContent = '수집 중... ('+done+'/'+FEEDS.length+')';
+      if (newItems.length > 0) {
+        var patch = {};
+        newItems.forEach(function(i){patch[i.id]=i;});
+        db.ref('news').update(patch);
+      }
+    });
+  }));
+  var at = savedAt();
+  db.ref('meta').set({lastCollected: at});
+  btn.disabled = false; dot.className = 'dot on';
+  statusText.textContent = totalNew > 0 ? '새 뉴스 '+totalNew+'건!' : '업데이트 완료 (새 기사 없음)';
+  nextUpdate = getNextScheduled();
+};
+
+window.clearAllNews = function() { db.ref('news').remove(); db.ref('seenIds').remove(); allNews=[]; renderNews(); };
+window.toggleKeyword = function(el, kw) { el.classList.toggle('active'); activeKeywords.has(kw)?activeKeywords.delete(kw):activeKeywords.add(kw); renderNews(); };
 
 function renderNews() {
   var list = document.getElementById('newsList');
-  var filtered = allNews.filter(function(i){ return activeKeywords.has(i.keyword); });
+  var filtered = allNews.filter(function(i){return activeKeywords.has(i.keyword);});
   var countEl = document.getElementById('newsCount');
-  if (countEl) countEl.textContent = filtered.length ? '(총 ' + filtered.length + '건)' : '';
-  if (!filtered.length) {
-    list.innerHTML = '<div class="empty">표시할 뉴스가 없습니다.</div>';
-    return;
-  }
+  if (countEl) countEl.textContent = filtered.length ? '(총 '+filtered.length+'건)' : '';
+  if (!filtered.length) { list.innerHTML = '<div class="empty">표시할 뉴스가 없습니다.</div>'; return; }
   list.innerHTML = filtered.map(function(item) {
-    return '<div class="news-card">' +
-      '<div class="news-meta">' +
-        '<span class="news-kw">' + item.keyword + '</span>' +
-        '<span class="news-source">' + (item.source||'') + '</span>' +
-        '<span class="news-time">' + (item.savedAt||'') + '</span>' +
-      '</div>' +
-      '<a class="news-title" href="' + (item.url||'#') + '" target="_blank" rel="noopener">' + item.title + '</a>' +
-      '<div class="news-desc">' + (item.desc||'') + '</div>' +
+    return '<div class="news-card">'+
+      '<div class="news-meta">'+
+        '<span class="news-kw">'+item.keyword+'</span>'+
+        '<span class="news-source">'+(item.source||'')+'</span>'+
+        '<span class="news-time">'+(item.savedAt||'')+'</span>'+
+      '</div>'+
+      '<a class="news-title" href="'+(item.url||'#')+'" target="_blank" rel="noopener">'+item.title+'</a>'+
+      '<div class="news-desc">'+(item.desc||'')+'</div>'+
     '</div>';
   }).join('');
 }
